@@ -49,7 +49,9 @@ volta -v
 ---
 
 #### Node.jsのインストール
+`Node.js`のインストールを行います．Node.jsのインストールには，先ほどインストールした，`Volta`を使用します．
 
+以下のコマンドを実行して，`Node.js`のインストールを行います．
 ```bash
 volta install node
 ```
@@ -57,9 +59,11 @@ volta install node
 ```bash
 success: installed and set node@20.10.0 (with npm@10.2.3) as default
 ```
-これでNode.jsの最新バージョンがインストールされます．
+これでNode.jsの最新バージョンがインストールされました．
 
 **バージョンの指定する場合**
+
+バージョンを指定する場合は，`node@19`のように，`@`以下にバージョンを追加するとできます．
 ```bash
 volta install node@19
                    ~~ バージョン指定
@@ -67,6 +71,7 @@ volta install node@19
 
 **インストール確認**
 
+以下のコマンドを入力することで，`Node.js`のバージョンを確認します．
 ```bash
 node -v
 ```
@@ -77,8 +82,12 @@ node -v
 ```
 バージョンが確認出来たら，インストール完了です．
 
+---
+
 #### pnpm のインストール
 
+パッケージ管理ツールである`pnpm`をインストールしていきます．
+以下紹介するコマンド等は，公式の[ドキュメント](https://pnpm.io/ja/installation)をもとに紹介しています．
 ```bash
 volta install pnpm
 ```
@@ -95,7 +104,16 @@ pnpm -v
 8.11.0
 ```
 
-### Azure Functions Core Tool
+バージョンが確認出来たら，正常にインストールされています．
+
+---
+
+### Azure Functions Core Tools
+
+Azure Functionsプロジェクトの作成，実行を行うために，`Azure Functions Core Tools`をインストールしていきます．
+以下紹介するコマンドは，Microsoftの[公式ドキュメント](https://learn.microsoft.com/ja-jp/azure/azure-functions/functions-run-local?tabs=linux%2Cisolated-process%2Cnode-v4%2Cpython-v2%2Chttp-trigger%2Ccontainer-apps&pivots=programming-language-csharp)をもとに紹介しています．
+
+まず，WSL上にパッケージの整合性をチェックするための，MicrosoftパッケージリポジトリのGPGキーをインストールします．以下2つのコマンドを順番に実行します．
 
 ```bash
 curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
@@ -103,16 +121,21 @@ curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microso
 ```bash
 sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
 ```
+次に，以下のコマンドを実行し，`apt`のソースリストを設定します．
 ```bash
 sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" > /etc/apt/sources.list.d/dotnetdev.list'
 ```
+次に，以下のコマンドを実行し，`apt`ソースを更新します．
 ```bash
 sudo apt-get update
 ```
+最後に，以下のコマンドを実行し，`Azure Functions Core Tools`をインストールしてください．
 ```bash
 sudo apt-get install azure-functions-core-tools-4
 ```
 **インストールの確認**
+
+以下のコマンドを実行し，`Azure Functions Core Tools`のバージョンを確認します．
 ```bash
 func -v
 ```
@@ -120,14 +143,32 @@ func -v
 ```bash
 4.0.5455
 ```
+このように，バージョンが表示されたら，正常にインストールが完了しました．
 
 ### .NET SDK
+
+`C#`の`Azure Functions`を実行するために，`.NET SDK`をインストールしていきます．以下紹介するコマンドはMicrosoftの[公式ドキュメント](https://learn.microsoft.com/ja-jp/dotnet/core/install/linux-ubuntu-2204)をもとに紹介しています．
+
+以下の2つのコマンドを順番に実行して，インストールしていきます．
+
 ```bash
 sudo apt-get update
 ```
 ```bash
 sudo apt-get install -y dotnet-sdk-8.0
 ```
+これでインストールが完了です．
+
+**インストールの確認**
+以下のコマンドを実行して，バージョンを確認していきます．
+```bash
+dotnet --vertion
+```
+**出力**
+```bash
+8.0.100
+```
+このようにバージョンが表示された場合は，正常にインストール完了です．
 
 ### Static Web Apps CLI
 
@@ -147,6 +188,23 @@ Welcome to Azure Static Web Apps CLI (1.1.6)
 ```
 
 ## プロジェクト作成
+
+### プロジェクトの構成
+
+今回は，フロントエンドとして`Vite` + `React.js` + `TypeScript`のプロジェクト，バックエンドとして，`C#`の`Azure Functions`プロジェクトを使用します．
+
+**ディレクトリ構成**
+```
+todo-app
+  ├ api
+  │  └ Azure Functionsのプロジェクト
+  │
+  └ client
+     └ Vite + Reactのプロジェクト
+```
+`todo-app/client`: フロントエンド部分
+
+`todo-app/api`: バックエンド部分
 
 ### Vite + React.js + TypeScript
 
@@ -170,6 +228,47 @@ Done. Now run:
   pnpm install
   pnpm run dev
 ```
+
+最後に，依存関係のインストールを済ませて，実行準備を完了させましょう．
+
+```bash
+cd client && pnpm install
+```
+
+**出力**
+```bash
+Downloading registry.npmjs.org/typescript/5.3.2: 5.76 MB/5.76 MB, done
+Packages: +156
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Downloading registry.npmjs.org/@swc/core-linux-x64-gnu/1.3.99: 15.40 MB/15.40 MB, done
+Downloading registry.npmjs.org/@swc/core-linux-x64-musl/1.3.99: 18.33 MB/18.33 MB, done
+Progress: resolved 195, reused 0, downloaded 156, added 156, done
+node_modules/.pnpm/@swc+core@1.3.99/node_modules/@swc/core: Running postinstall script, done in 155ms
+node_modules/.pnpm/esbuild@0.19.8/node_modules/esbuild: Running postinstall script, done in 132ms
+
+dependencies:
++ react 18.2.0
++ react-dom 18.2.0
+
+devDependencies:
++ @types/react 18.2.39
++ @types/react-dom 18.2.17
++ @typescript-eslint/eslint-plugin 6.13.0
++ @typescript-eslint/parser 6.13.0
++ @vitejs/plugin-react-swc 3.5.0
++ eslint 8.54.0
++ eslint-plugin-react-hooks 4.6.0
++ eslint-plugin-react-refresh 0.4.4
++ typescript 5.3.2
++ vite 5.0.2
+
+The dependency was already listed in devDependencies.
+If you want to make it a prod dependency, then move it manually.
+
+Done in 27.9s
+```
+
+これで，クライアント側のプロジェクト作成と実行準備が整いました．
 
 ### Azure Functions (C#)
 ```bash

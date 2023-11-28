@@ -172,10 +172,19 @@ dotnet --vertion
 
 ### Static Web Apps CLI
 
+clientとapiのつなぎ込みや，認証機能などは，AzureのStatic Web Appsの機能を使用します．そのStatic Web Appsの機能をローカルでデバッグするためのツールが`Atatic Web Apps CLI`です．
+以下紹介するコマンドは，公式の[ドキュメント](https://azure.github.io/static-web-apps-cli/docs/use/install/)をもとに紹介しています．
+
+`Static Web Apps CLI`をインストールするには，以下のコマンドを実行します．
 ```bash
 npm install -g @azure/static-web-apps-cli
 ```
 
+これでインストール完了です．
+
+**インストールの確認**
+
+以下のコマンドを実行して，`Static Web Apps CLI`のバージョンを確認します．
 ```bash
 swa -version
 ```
@@ -186,6 +195,41 @@ Welcome to Azure Static Web Apps CLI (1.1.6)
 
 1.1.6
 ```
+
+このように，バージョンが出力されたら，インストール完了です．
+
+### Make (推奨)
+
+今回のプロジェクトは，デバッグに多数のコマンドを使用するため，使用するコマンドをあらかじめ`Makefile`として定義しておくととても便利です．今回のプロジェクトに必須ではありませんが，使用することを推奨します．
+
+インストールするには，次のコマンドを実行してください．
+
+```bash
+sudo apt update
+```
+```bash
+sudo apt install make
+```
+
+これで`Makefile`を使用することができます．
+
+**インストールの確認**
+```bash
+make -v
+```
+
+**出力**
+
+```bash
+GNU Make 4.3
+Built for x86_64-pc-linux-gnu
+Copyright (C) 1988-2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+```
+
+このようにバージョンが表示された場合は，正常にインストール完了です．
 
 ## プロジェクト作成
 

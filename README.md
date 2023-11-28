@@ -252,8 +252,44 @@ todo-app
 
 ### Vite + React.js + TypeScript
 
+`Vite` + `React.js` + `TypeScript`のプロジェクトを作成するには，`/todo-app`ディレクトリで以下のコマンドを実行します．
+
 ```bash
 pnpm create vite@latest
+```
+このコマンドを実行すると，`プロジェクト名`, `フレームワーク`，`言語`を問われます．
+今回はプロジェクト名を`client`にし，フレームワークは`React`，言語は`TypeScript + SWC`にします．
+
+フレームワークと言語は方向キーで操作し，Enterキーで確定します．
+
+**プロジェクト名**
+```bash
+?Project name: client
+```
+
+**フレームワーク**
+
+```bash
+?Select a framework:
+    Vanilla
+    Vue
+>   React
+    Preact
+    Lit
+    Svelte
+    Solid
+    Qwik
+    Others
+```
+
+**言語**
+
+```bash
+?Select a variant:
+    TypeScript
+>   TypeScript + SWC
+    JavaScript
+    JavaScript + SWC
 ```
 
 **出力**

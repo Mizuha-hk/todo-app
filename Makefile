@@ -6,5 +6,5 @@ swa:
 client:
 	cd client && pnpm run dev
 
-server:
-	cd server && func start
+api:
+	cd api && func start 

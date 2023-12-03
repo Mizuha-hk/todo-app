@@ -198,6 +198,35 @@ Welcome to Azure Static Web Apps CLI (1.1.6)
 
 このように，バージョンが出力されたら，インストール完了です．
 
+### Azurite
+
+`Azure Storage Account`をローカル環境でデバッグする際に，`Azurite`を使用します．インストールするには以下のコマンドを実行します．
+
+```bash
+npm install -g azurite
+```
+
+**インストールの確認**
+インストールの確認には，以下のコマンドを実行して，バージョンを確認します．
+```bash
+azurite -v
+```
+
+**出力**
+```bash
+3.28.0
+```
+このようにバージョンが表示された場合はインストール完了です．
+
+### Microsoft Azure Storage Explorer
+`Microsoft Azure Storage Explorer`は，`Azure Storage Account`に保存されているデータをGUIで見ることができる便利ツールです．
+
+[ここ](https://azure.microsoft.com/ja-jp/products/storage/storage-explorer/)からダウンロードページに飛び，「今すぐダウンロード」から「Windows」を選択します．
+
+![download-azurite](/assets/download-azurite.png)
+
+ダウンロードしたファイルを実行し，利用規約に同意してインストールをしたら，完了です．
+
 ### Make
 
 今回のプロジェクトは，デバッグに多数のコマンドを使用するため，使用するコマンドをあらかじめ`Makefile`として定義しておくととても便利です．今回のプロジェクトに必須ではありませんが，使用することを推奨します．
@@ -567,18 +596,23 @@ pnpm run dev
 func start
 ```
 
+`Azurite`の起動は`/todo-app`ディレクトリ下で次のコマンドで実行できます．
+```bash
+azurite --silent --location c:\azurite --debug c:\azurite\debug.log
+```
+
 `Static Web Apps CLI`の実行は`/todo-app`ディレクトリ下で次のコマンドで実行できます．
 
 ```bash
 swa start http://localhost:5173 --api-devserver-url http://localhost:7071
 ```
 
-この3つのコマンドを実行することになります．いちいち打つのはまぁ超面倒ですよね...
+この4つのコマンドを実行することになります．いちいち打つのはまぁ超面倒ですよね...
 
 そこで，これらのコマンド`Makefile`に定義していきます．`/todo-app`ディレクトリ下で，`Makefile`という名前のファイルを作り，以下の内容を入力して保存します．
 
 ```Makefile
-.PHONY: swa client api
+.PHONY: swa client api azurite
 
 swa:
 	swa start http://localhost:5173 --api-devserver-url http://localhost:7071
@@ -588,6 +622,9 @@ client:
 
 api:
 	cd api && func start 
+
+azurite:
+	azurite --silent --location c:\azurite --debug c:\azurite\debug.log
 ```
 
 こうすると，
@@ -599,6 +636,10 @@ make client
 バックエンドの実行コマンド
 ```bash
 make api
+```
+`Azurite`起動コマンド
+```bash
+make azurite
 ```
 `Static Web Apps CLI`の実行コマンド
 ```bash
@@ -674,6 +715,23 @@ For detailed output, run func with --verbose flag.
 
 ![default-api](/assets/default-api.png)
 
+また，`Azure Storage Account`の操作はバックエンドの仕事なので，操作のテストを行いたい場合は`Azurite`も起動しましょう．
+
+```bash
+make azurite
+```
+
+**出力**
+
+```bash
+Azurite Blob service is starting at http://127.0.0.1:10000
+Azurite Blob service is successfully listening at http://127.0.0.1:10000
+Azurite Queue service is starting at http://127.0.0.1:10001
+Azurite Queue service is successfully listening at http://127.0.0.1:10001
+Azurite Table service is starting at http://127.0.0.1:10002
+Azurite Table service is successfully listening at http://127.0.0.1:10002
+```
+
 これでバックエンド単体での実行は完了です．バックエンドが想定通りのデータを返しているかチェックするだけであればこれで十分です．
 
 #### Static Web Apps CLI を起動
@@ -716,3 +774,13 @@ Welcome to Azure Static Web Apps CLI (1.1.6)
 ![default-api](/assets/default-api.png)
 
 フロントエンドとバックエンドが統合された状態での機能を追加する場合は，`Static Web Apps CLI`を使いましょう．
+
+## 開発開始
+
+### フロントエンド
+
+### バックエンド
+
+### 繋ぎこみ
+
+## デプロイ

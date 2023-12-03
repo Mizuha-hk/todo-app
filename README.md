@@ -198,7 +198,7 @@ Welcome to Azure Static Web Apps CLI (1.1.6)
 
 このように，バージョンが出力されたら，インストール完了です．
 
-### Make (推奨)
+### Make
 
 今回のプロジェクトは，デバッグに多数のコマンドを使用するため，使用するコマンドをあらかじめ`Makefile`として定義しておくととても便利です．今回のプロジェクトに必須ではありませんが，使用することを推奨します．
 
@@ -351,13 +351,19 @@ Done in 27.9s
 これで，クライアント側のプロジェクト作成と実行準備が整いました．
 
 ### Azure Functions (C#)
+
+Azure Functions のプロジェクトを作成するには，まずプロジェクト用のディレクトリを作成し，ディレクトリを移動します．
 ```bash
 makdir api
 cd api
 ```
+次に，以下のコマンドを実行して，プロジェクトを作成します．
 ```bash
 func init
 ```
+
+実行すると，プロジェクトテンプレートの種類を聞かれるので，該当する数字を入力して作成します．
+今回は，ランタイムは`dotnet`，言語は`c#`を選択します．
 
 **出力**
 ```bash
@@ -378,10 +384,13 @@ c#
 
 Writing /home/<yourName>/.../todo-app/api/.vscode/extentions.json
 ```
-サンプルのapiを生成する
+これでプロジェクトの作成は完了です．ただし，この状態では，apiが一切定義されていないので，適当にサンプルのapiを生成します．
+
+以下のコマンドを`/todo-app/api`のディレクトリ下で実行してください．
 ```bash
 func new
 ```
+すると，テンプレートの種類と名前を作成することを要求されます．今回は，テンプレートは`HttpTrigger`，名前は`SampleFunction`とします．
 
 **出力**
 ```bash
@@ -411,10 +420,68 @@ Creating dotnet function...
 The function "SampleFunction" was created successfully from the "HttpTrigger" template.
 ```
 
+これで，サンプルのapiが作成されました．これで実行準備が完了しました．
+
 ### Static Web Apps CLI
 
+今回はデバッグに`Static Web Apps CLI`を使用するため，今回のプロジェクトに対して，`Static Web Apps CLI`のセットアップをしていきます．
+
+`/todo-app`ディレクトリ下で以下のコマンドを実行してください．
 ```bash
 swa init
+```
+
+すると，設定の名前の入力とアプリの設定を質問されます．このあたりの構成は，現状作っているプロジェクトを参照して，勝手に生成されますが，若干違いもあるので，修正していきます．
+
+まず，設定の名前を質問されますが，既に表示されている`todo-app`という名前で大丈夫です．
+
+次に，アプリの構成を読み取って，設定を自動で生成してくれます．
+
+```bash
+Detected configuration for your app:
+- Framework(s): Vite, with API: .NET, .NET
+- App location: client
+- Output location: dist
+- API location: api
+- API language: dotnetisolated
+- API version: 6.0
+- Data API location: 
+- App build command: npm run build
+- API build command: dotnet publish -c Release
+- App dev server command: npm run dev
+- App dev server URL: http://localhost:5173
+
+- API dev server URL: 
+
+? Are these settings correct? > (Y/n)
+```
+ただし，今回は
+
+`API language`は`dotnet`
+
+`App build command`は`pnpm run build`
+
+`App dev server command`は`pnpm run dev`
+
+になるため，`n`を入力して修正していきます．
+
+**API language**
+```bash
+?What's your API language (optional) > Use arrow-keys. Return to submit.
+  Node.js
+  Python
+> Dotnet
+  Dotnet isolated
+```
+
+**App build command**
+```bash
+?What command do you use to build your app? (optional) › pnpm run build
+```
+
+**App dev server command**
+```bash
+? What command do you use to run your app for development? (optional) › pnpm run dev
 ```
 
 **出力**
@@ -438,7 +505,19 @@ Detected configuration for your app:
 
 - API dev server URL: 
 
-✔ Are these settings correct? … yes
+✔ Are these settings correct? … no
+✔ What's your app location? … client
+✔ What's your build output location? … dist
+✔ What's your API location? (optional) … api
+✔ What's your API language? (optional) › Dotnet
+✔ What's your API version? (optional) › 6.0
+✔ What's your data API location? (optional) … 
+✔ What command do you use to build your app? (optional) … pnpm run build
+✔ What command do you use to build your API? (optional) … dotnet publish -c Release
+✔ What command do you use to run your app for development? (optional) … pnpm run dev
+✔ What's your app development server URL (optional) … http://localhost:5173
+✔ What's your API development server URL (optional) … 
+✔ Configuration with name "todo-app" already exists, overwrite? … yes
 
 Configuration successfully saved to swa-cli.config.json.
 
@@ -447,6 +526,8 @@ Get started with the following commands:
 - Use swa build to build your app.
 - Use swa deploy to deploy your app to Azure.
 ```
+
+ここで設定した構成は，`swa-cli.config.json`に保存されています．
 
 **swa-cli.config.json**
 ```json
@@ -457,13 +538,181 @@ Get started with the following commands:
       "appLocation": "client",
       "apiLocation": "api",
       "outputLocation": "dist",
-      "apiLanguage": "dotnetisolated",
+      "apiLanguage": "dotnet",
       "apiVersion": "6.0",
-      "appBuildCommand": "npm run build",
+      "appBuildCommand": "pnpm run build",
       "apiBuildCommand": "dotnet publish -c Release",
-      "run": "npm run dev",
+      "run": "pnpm run dev",
       "appDevserverUrl": "http://localhost:5173"
     }
   }
 }
 ```
+
+これで，`Static Web Apps CLI`の準備は完了です．
+
+### Makefile
+
+ここまで，おおよそのプロジェクトの作成が完了しました．ではここで実行コマンドを確認しておきましょう．
+
+フロントエンドの起動は`/todo-app/client`ディレクトリ下で次のコマンドで実行できます．
+
+```bash
+pnpm run dev
+```
+
+バックエンドの起動は`/todo-app/client`ディレクトリ下で次のコマンドで実行できます．
+
+```bash
+func start
+```
+
+`Static Web Apps CLI`の実行は`/todo-app`ディレクトリ下で次のコマンドで実行できます．
+
+```bash
+swa start http://localhost:5173 --api-devserver-url http://localhost:7071
+```
+
+この3つのコマンドを実行することになります．いちいち打つのはまぁ超面倒ですよね...
+
+そこで，これらのコマンド`Makefile`に定義していきます．`/todo-app`ディレクトリ下で，`Makefile`という名前のファイルを作り，以下の内容を入力して保存します．
+
+```Makefile
+.PHONY: swa client api
+
+swa:
+	swa start http://localhost:5173 --api-devserver-url http://localhost:7071
+
+client:
+	cd client && pnpm run dev
+
+api:
+	cd api && func start 
+```
+
+こうすると，
+
+フロントエンドの実行コマンド
+```bash
+make client
+```
+バックエンドの実行コマンド
+```bash
+make api
+```
+`Static Web Apps CLI`の実行コマンド
+```bash
+make swa
+```
+
+となり，入力がだいぶ楽になります．さらにTabキーで補完ができるのでさらに楽です．
+
+特に`Static Web Apps CLI`は起動コマンドが長いので，このように`Makefile`を書くことを推奨します．
+
+### 実行してみる
+
+それでは，作成したプロジェクトを実行してみましょう．コマンドは`Makefile`で定義したものを使用します．
+
+#### フロントエンド単体で実行
+実行コマンド
+```bash
+make client
+```
+
+**出力**
+```bash
+ VITE v5.0.2  ready in 474 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help
+```
+
+`http://localhost:5173`をブラウザで開きます．すると，下の画像のようなサイトに飛ぶことができます．
+
+![default-client](/assets/default-client.png)
+
+これでフロントエンド単体の実行は完了です．サイトの外見だけのチェックであればこれで十分です．
+
+#### バックエンド単体で実行
+
+実行コマンド
+```bash
+make api
+```
+**出力**
+
+```bash
+MSBuild version 17.8.3+195e7f5a3 for .NET
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  api -> /home/<yourName>/.../todo-app/api/bin/output/api.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.56
+
+
+
+Azure Functions Core Tools
+Core Tools Version:       4.0.5455 Commit hash: N/A  (64-bit)
+Function Runtime Version: 4.27.5.21554
+
+[2023-12-03T18:35:13.838Z] Found /home/<yourName>/.../todo-app/api/api.csproj. Using for user secrets file configuration.
+
+Functions:
+
+        SampleFunction: [GET,POST] http://localhost:7071/api/SampleFunction
+
+For detailed output, run func with --verbose flag.
+
+```
+
+ここで，`http://localhost:7071/api/SampleFunction`にブラウザでアクセスすると，下のように表示されます．
+
+![default-api](/assets/default-api.png)
+
+これでバックエンド単体での実行は完了です．バックエンドが想定通りのデータを返しているかチェックするだけであればこれで十分です．
+
+#### Static Web Apps CLI を起動
+
+**フロントエンドとバックエンドを起動した状態で**別のターミナルを開き，コマンドを実行します．
+
+実行コマンド
+```bash
+make swa
+```
+
+**出力**
+```bash
+Welcome to Azure Static Web Apps CLI (1.1.6)
+
+***********************************************************************
+* WARNING: This emulator may not match the cloud environment exactly. *
+* Always deploy and test your app in Azure.                           *
+***********************************************************************
+
+[swa] 
+[swa] Using dev server for static content:
+[swa]   http://localhost:5173
+[swa] 
+[swa] Using dev server for API:
+[swa]   http://localhost:7071
+[swa] 
+[swa] Azure Static Web Apps emulator started at http://localhost:4280. Press CTRL+C to exit.
+[swa] 
+[swa] 
+
+```
+
+これで，`http://localhost:4280`をブラウザで開きます．すると，下のように，作成中のフロントエンドアプリが表示されるはずです．
+
+![default-client](/assets/default-client.png)
+
+また，`http://localhost:4280/api/SampleFunction`に飛ぶと，バックエンドのレスポンスが帰ってきます．
+
+![default-api](/assets/default-api.png)
+
+フロントエンドとバックエンドが統合された状態での機能を追加する場合は，`Static Web Apps CLI`を使いましょう．

@@ -1,0 +1,21 @@
+.form{
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    margin: 2rem;
+
+    .title{
+        height: 2rem;
+        width: 32rem;
+    }
+
+    .description{
+        height: 4rem;
+        width: 32rem;
+    }
+    
+    .submit{
+        margin: 1rem;
+    }
+}
+

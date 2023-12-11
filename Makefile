@@ -1,4 +1,4 @@
-.PHONY: swa client api azurite
+.PHONY: swa client api azurite tree
 
 swa:
 	swa start http://localhost:5173 --api-devserver-url http://localhost:7071
@@ -11,3 +11,6 @@ api:
 
 azurite:
 	azurite --silent --location c:\azurite --debug c:\azurite\debug.log
+
+tree:
+	tree -I "node_modules|dist|bin|obj"

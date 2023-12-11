@@ -1,0 +1,50 @@
+.root{
+    margin: 2rem;
+}
+
+.todo-list{
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    height: 20rem;
+    background-color: #141414;
+    overflow-y: scroll;
+    scroll-behavior: inherit;
+    scrollbar-width: thin;
+}
+
+li{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 0.5rem;
+
+    
+}
+
+.button{
+    background-color: brown;
+    color: white;
+}
+
+.over-view{
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.title{
+    min-width: 12rem;
+}
+
+.description{
+    margin-left: 0.5rem;
+}
+
+.item-border{
+    border-right: 1px solid white;
+}

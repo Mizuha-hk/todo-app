@@ -1,4 +1,4 @@
-# Static Web Appによる最小構成のWebアプリ
+# Static Web Appによる認証付きtodoアプリを作る
 
 ## 環境構築
 

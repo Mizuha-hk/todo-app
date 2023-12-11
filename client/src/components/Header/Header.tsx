@@ -11,9 +11,9 @@ function Header(){
         <h2>Todo-App</h2>
         <div>
             {isLoggedIn ? (
-                <a href="/.auth/logout">ログアウト</a>
+                <a href="/logout">ログアウト</a>
             ) : (
-                <a href="/.auth/login/aad">ログイン</a>
+                <a href="/login">ログイン</a>
             )}
         </div>
         </header>

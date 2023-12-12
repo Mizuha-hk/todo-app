@@ -1,4 +1,32 @@
-# Static Web Appによる認証付きtodoアプリを作る
+# Static Web Appsによる最小Webアプリを作る
+
+## はじめに
+
+**記事重すぎで草**
+
+## 今回やること
+
+今回はTodoアプリを作成し，AzureのStatic Web Appsにデプロイ(公開)するまでをやっていきます．Static Web AppsはWebフロントをデプロイするのに使われるサービスですが，Azure Functionsというバックエンドサーバーをくっつけてデプロイすることができたり，認証機能が簡単に付けれたりします．そんな機能をフル活用して，認証機能付きのTodoアプリを作成していきます．また，データベースとして，Azure Storage Accountを使用します．
+
+## Static Web Appのメリット / デメリット
+
+### メリット
+
+#### フロントエンドとバックエンドの繋ぎが楽
+
+Static Web Appsにフロントエンドとバックエンドがくっついた状態でデプロイされるので，両者でドメインが分かれません．なので，フロントエンドがバックエンドに問い合わせしたい時は，`/api/*`にアクセスするだけで可能になります．
+
+#### GitHub認証とAAD(Microsoftアカウント)認証が付いている
+
+`/.auth/login/github`にアクセスするとGitHubアカウントでログイン，`/.auth/login/aad`にアクセスするとMicrosoftアカウントでログインができます．
+
+### デメリット
+
+#### ローカルデバッグが少し面倒
+
+Static Web Apps の機能を使うため，ローカル環境でのデバッグが少し面倒です．ローカル環境でもデバッグができるように，Static Web Apps CLIといういツールがあるので，このツールの使い方に慣れる必要があります．
+
+ただ，慣れれば，デプロイを済ませずとも，フロントエンドとバックエンドを繋ぎこんだ状態でのデバッグができるという利点はあります．
 
 ## 環境構築
 
@@ -778,6 +806,679 @@ Welcome to Azure Static Web Apps CLI (1.1.6)
 ## 開発開始
 
 ### フロントエンド
+
+#### 概要
+
+今回作成するTodoアプリに必要なものをリストアップしてみます．
+
+**UIの部品**
+|コンポーネント名|説明|
+|:--|:--|
+|`Header`|ヘッダー．ログイン/ログアウト ボタンを配置する．|
+|`TodoList`|現在のTodoリストを表示する．|
+|`Form`|Todoを追加するためのフォーム．|
+
+**機能**
+|機能名|説明|
+|:--|:--|
+|`get-profile`|ユーザー情報を取得する．|
+|`todos`|Todoの取得，追加，削除する．|
+
+**プロバイダー**
+|プロバイダー名|説明|
+|:--|:--|
+|`AppProvider`|アプリ全体で共有する状態を管理するProvider．ログインの状態管理に使用します．|
+|`TodoItemProvider`|Todoの状態を管理するProvider．|
+
+ディレクトリ構造は下のようになりました．`react.js`は基本的に`/src`以下にファイルを配置していきます．UIの部品は`/src/components`以下，機能は`/src/features`以下に，プロバイダーは`/src/providers`以下に配置します．
+
+**ディレクトリ構成**
+```
+client
+├── README.md
+├── index.html
+├── package.json
+├── pnpm-lock.yaml
+├── public
+│   └── vite.svg
+├── src
+│   ├── App.css
+│   ├── App.tsx
+│   ├── assets
+│   │   └── react.svg
+│   ├── components
+│   │   ├── Form
+│   │   │   ├── Form.css
+│   │   │   └── Form.tsx
+│   │   ├── Header
+│   │   │   ├── Header.css
+│   │   │   └── Header.tsx
+│   │   └── TodoList
+│   │       ├── TodoList.css
+│   │       └── TodoList.tsx
+│   ├── features
+│   │   ├── get-profile
+│   │   │   ├── api
+│   │   │   │   └── ClientPrincipal.ts
+│   │   │   └── index.ts
+│   │   └── todos
+│   │       ├── api
+│   │       │   ├── TodoAction.ts
+│   │       │   ├── TodoItem.ts
+│   │       │   └── TodoItemRequest.ts
+│   │       └── index.ts
+│   ├── index.css
+│   ├── main.tsx
+│   ├── providers
+│   │   ├── AppProvider.tsx
+│   │   └── TodoItemProvider.tsx
+│   └── vite-env.d.ts
+├── tsconfig.json
+├── tsconfig.node.json
+└── vite.config.ts
+```
+
+#### 機能を実装する
+
+`/src/features`にアプリの機能部分を実装していきます．基本的にここには，バックエンドとの繋ぎこみの処理を書いていきます．
+
+##### todos
+
+まず，Todoのデータを格納する型を作っていきます．`features/todos/api`以下に作成します．
+
+**TodoItem.ts**
+```ts
+type TodoItem = {
+    id: string;
+    userId: string;
+    title: string;
+    description: string;
+}
+
+export type { TodoItem };
+```
+
+また，Todoを追加する際に，バックエンドに問い合わせる情報の型を作っていきます．
+
+**TodoItemRequest.ts**
+```ts
+type TodoItemRequest = {
+    userId: string;
+    title: string;
+    description: string;
+}
+
+export type { TodoItemRequest }
+```
+
+そして，Todoの取得，追加，削除の処理を追加していきます．ただし，バックエンドはまだ作っていないので，適当なデータを返すように書いていきます．`/features/todos`以下に次のファイルを追加します．
+
+**index.ts**
+```ts
+import { TodoItem } from "./api/TodoItem";
+import { TodoItemRequest } from "./api/TodoItemRequest";
+
+async function GetTodos(userId: string) {
+
+  //適当なデータ
+    const body = [
+        {
+            id: "7ff198b0-8bbe-4d6c-a7b0-ab4a527d5389",
+            userId: userId,
+            title: "Test1",
+            description: "Test1"
+        },
+        {
+            id: "1ad0f127-4f79-46e2-9e16-1eb707a371fb",
+            userId: userId,
+            title: "Test2",
+            description: "Test2",
+        },
+        {
+            id: "586ce27f-bd18-4cf6-b7ff-3c3f410748c2",
+            userId: userId,
+            title: "Test3",
+            description: "Test3",
+        }
+    ] as TodoItem[];
+    return body;
+}
+
+async function PostTodos(todo: TodoItemRequest) {
+
+    //適当なデータ
+    const body = {
+        id: "f3b892e3-9ccd-408a-99a4-cc86dea37463",
+        userId: todo.userId,
+        title: todo.title,
+        description: todo.description
+    } as TodoItem;
+
+    return body;
+}
+
+async function DeleteTodos(todo: TodoItem) {
+    
+}
+
+export { GetTodos };
+export { PostTodos };
+export { DeleteTodos };
+```
+
+##### get-profile
+
+認証情報を取得する機能を追加していきます．ログイン済みの状態で，`/.auth/me`にアクセスすると，ユーザー情報を取得することができます．ただし，この機能のデバッグには`Static Web Apps CLI`の起動が必須になります．ユーザー情報は以下のような形式で取得できます．
+
+```json
+{
+    "clientPrincipal": {
+        "identityProvider": "github",
+        "userId": "je89c8db0-3f6c-4f73-a802-20bfe0134f4c",
+        "userDetails": "UserName",
+        "userRoles": [
+            "anonymous",
+            "authenticated"
+        ]
+    }
+}
+```
+このデータ形式に合わせて，データを受け取るための型を作成していきます．
+
+`/get-profile/api`に次のファイルを作成していきます．
+
+**ClientPrincipal.ts**
+```ts
+type ClientPrincipal = {
+    identityProvider: string;
+    userId: string;
+    userDetails: string;
+    userRoles: string[];
+}
+
+type AuthResponse = {
+    clientPrincipal: ClientPrincipal;
+}
+
+export type { ClientPrincipal };
+
+export type { AuthResponse };
+```
+
+`AuthResponse`型でデータを受け取っていきます．`/features/get-profile`いかに次のファイルを作成します．
+
+**index.ts**
+```ts
+import { AuthResponse } from "./api/ClientPrincipal";
+
+async function GetProfile() {
+    const result = await fetch('/.auth/me');
+    const body = await result.json() as AuthResponse;
+    return body;
+}
+
+export { GetProfile };
+```
+
+ログインしていない場合は，`AuthResponse`内の`clientPrincipal`に`null`が入っているので，これでログインしているか，していないかを判定します．
+
+#### プロバイダーを実装する
+
+##### AppProvider
+
+`useState`でユーザー情報を状態として持ち，その情報をProviderとして子コンポーネントに提供します．`useEffect`で読み込み時に`GetProfile`を呼び出し，ユーザー情報を取得して`setUser`で反映させています．
+
+**AppProvider.tsx**
+```ts
+import React, { createContext, useEffect, useState } from "react"
+import { GetProfile } from "../features/get-profile";
+import { AuthResponse } from "../features/get-profile/api/ClientPrincipal";
+
+type AppProviderProps = {
+    children: React.ReactNode;
+};
+
+const AppContext = createContext<AuthResponse | null>(null);
+
+const AppProvider : React.FC<AppProviderProps> = ({children}) => {
+    const [user, setUser] = useState<AuthResponse | null>(null);
+
+    useEffect(() =>
+    {
+        GetProfile().then((response) => setUser(response));
+    }, []);
+
+    if(user === null){
+        return <div>Loading...</div>
+    }
+
+    return(
+        <AppContext.Provider value={user}>
+            {children}
+        </AppContext.Provider>
+    )
+};
+
+export function useAppContext(){
+    const context = React.useContext(AppContext);
+    if(context === undefined){
+        throw new Error("useAppContext must be used within a AppProvider");
+    }
+    return context;
+}
+
+export default AppProvider;
+```
+
+##### TodoItemProvider
+
+**TodoAction.ts**
+
+各アクション(Todoを追加する，削除する等)ごとに必要なパラメーター
+```ts
+import { TodoItem } from "./TodoItem";
+
+type TodoAction =
+    { type: 'ADD_TODO', todo: TodoItem } |
+    { type: 'REMOVE_TODO', id: string } |
+    { type: 'GET_TODOS', todos: TodoItem[]};
+
+export type { TodoAction };
+```
+
+**TodoItemProvider.tsx**
+```ts
+import React, { Dispatch, createContext, useEffect, useReducer } from "react";
+import { TodoItem } from "../features/todos/api/TodoItem";
+import { GetTodos } from "../features/todos";
+import { TodoAction } from "../features/todos/api/TodoAction";
+import { useAppContext } from "./AppProvider";
+
+type TodoItemProviderProps = {
+    children: React.ReactNode;
+};
+
+const TodoItemContext = createContext<{
+    todos: TodoItem[];
+    dispatch: Dispatch<TodoAction>;
+} | undefined>(undefined);
+
+
+const initialtodos: TodoItem[] = [];
+
+const reducer = (todos: TodoItem[], action: TodoAction) => {
+    switch (action.type) {
+        case "ADD_TODO":{
+            if(action.todo.title === ""){
+                return todos;
+            }      
+            //元のtodosと追加したtodoを連結して返す
+            return [...todos, action.todo]
+        }
+        case "REMOVE_TODO":{
+            //todosの中で，削除するidのアイテム以外を返す
+            return todos.filter(todo => todo.id !== action.id);
+        }
+        case "GET_TODOS":
+            //渡したtodosをそのまま返す
+            return action.todos;
+        default:
+            return todos;
+        }
+    }
+           
+const TodoItemProvider : React.FC<TodoItemProviderProps> = ({children}) =>{
+    const resource = useAppContext();
+    const [todos, dispatch] = useReducer(reducer, initialtodos);
+    const isLoggedIn = resource?.clientPrincipal !== null;
+
+    useEffect(() =>
+    {
+        //ログインしていないときは何もしない
+        if(!isLoggedIn){
+            return;
+        }
+        //GetTodosでTodoを取得し，dispatchでtodosにセットする
+        GetTodos(resource?.clientPrincipal.userId ?? "").then((response) => {
+            dispatch({type: "GET_TODOS", todos: response})
+        });
+    }, []);
+
+    if(todos === null){
+        return <div>Loading...</div>
+    }
+
+    return(
+        <TodoItemContext.Provider value={{todos, dispatch}}>
+            {children}
+        </TodoItemContext.Provider>
+    )
+};
+
+export function useTodoItemContext(){
+    const context = React.useContext(TodoItemContext);
+    if(context === undefined){
+        throw new Error("useTodoItemContext must be used within a TodoItemProvider");
+    }
+    return context;
+}
+
+export default TodoItemProvider;
+```
+
+#### UIを実装する
+
+##### Header
+
+**Header.tsx**
+```ts
+import './Header.css'
+import { useAppContext } from "../../providers/AppProvider"
+
+function Header(){
+    //AppProviderのAppContextからユーザー情報を取得する
+    const resource = useAppContext();
+    //clientPrincipalがnullかどうかでログインしているか判定する
+    const isLoggedIn = resource?.clientPrincipal !== null;
+
+    return(
+        <header>
+        <h2>Todo-App</h2>
+        <div>
+            <!--ログイン状態の時-->
+            {isLoggedIn ? (
+                <a href="/.auth/logout">ログアウト</a>
+            ) : (
+            <!--ログインしていないとき-->
+                <a href="/.auth/login/github">ログイン</a>
+            )}
+        </div>
+        </header>
+    )
+}
+
+export default Header
+```
+
+`Header.css`でお好みの見た目にしてみてください．
+
+##### TodoList
+
+**TodoList.tsx**
+```ts
+import { DeleteTodos } from '../../features/todos';
+import { useAppContext } from '../../providers/AppProvider';
+import { useTodoItemContext } from '../../providers/TodoItemProvider';
+import './TodoList.css';
+
+function TodoList(){
+    //AppProviderのAppContextからユーザー情報の取得
+    const resource = useAppContext();
+    //TodoItemProviderのTodoItemContextから，todosとdispatchメソッドの取得
+    const {todos, dispatch} = useTodoItemContext();
+    const isLoggedIn = resource?.clientPrincipal !== null;
+
+    return (
+        <div className='root'>
+            {
+                isLoggedIn ? (
+                    <div>
+                        <h1>あなたのタスク</h1>
+                        <ul className='todo-list'>
+                            <!--todosのすべての要素に対して以下のようなUIを実装-->
+                            {todos.map((todo, i) => (
+                                <li key={i}>
+                                <div className='over-view'>
+                                    <div className='title item-border'>
+                                        {todo.title}
+                                    </div>
+                                    <div className='description'>
+                                        {todo.description}
+                                    </div>
+                                </div>
+                                <button onClick={async () => {
+                                    await DeleteTodos(todo);
+                                    dispatch({type:'REMOVE_TODO',id:todo.id})   
+                                    }} 
+                                    className='button'>完了</button>
+                            </li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : (
+                    <div>
+                        <p>ログインしてください</p>
+                    </div>
+                )
+            }
+        </div>
+    )
+}
+
+export default TodoList
+```
+
+`TodoList.css`でお好みの見た目にしてください．
+
+##### Form
+
+**Form.tsx**
+```ts
+import React from "react";
+import { useAppContext } from "../../providers/AppProvider";
+import { useTodoItemContext } from "../../providers/TodoItemProvider";
+import { PostTodos } from "../../features/todos";
+import './Form.css';
+
+
+function Form() {
+    const resource = useAppContext();
+    const [title, setTitle] = React.useState("");
+    const [description, setDescription] = React.useState("");
+    const {dispatch} = useTodoItemContext();
+
+    //追加ボタンを押したときの処理
+    async function onSubmited(e: React.FormEvent<HTMLFormElement>){
+        e.preventDefault();
+        var response = await PostTodos({title, description, userId: resource?.clientPrincipal.userId ?? ""});
+        dispatch({type: "ADD_TODO", todo: response});
+    }
+
+    const isLoggedIn = resource?.clientPrincipal !== null;
+    return(
+        <div className="form">
+        {
+            isLoggedIn ? (
+            <div>
+                <h1>タスクを追加</h1>
+                <form onSubmit={onSubmited}>
+                    <h2>タイトル</h2>
+                    <input
+                        className="title"
+                        value={title} 
+                        onChange={(e) => setTitle(e.target.value)}
+                        required
+                        type="text" />
+                    <h2>説明</h2>
+                    <input
+                        className="description"
+                        value={description} 
+                        onChange={(e) => setDescription(e.target.value)}
+                        type="text" />
+                    <button className="submit" type="submit">追加</button>
+                </form>
+            </div>
+            ) : (
+                <div>
+                </div>
+            )
+        }
+        </div>
+    )
+}
+
+export default Form
+```
+
+`Form.css`でお好みの見た目にしてください．
+
+#### App.tsxを編集
+最後に，`App.tsx`を編集して，これまで作成した部品を組み立てます．
+```ts
+//import './App.css'
+import AppProvider from './providers/AppProvider'
+import Header from './components/Header/Header'
+import TodoList from './components/TodoList/TodoList'
+import Form from './components/Form/Form'
+import TodoItemProvider from './providers/TodoItemProvider'
+
+function App() {
+
+  return (
+    <>
+      <AppProvider>
+        <Header/>
+        <TodoItemProvider>
+          <TodoList/>
+          <Form/>
+        </TodoItemProvider>
+      </AppProvider>
+    </>
+  )
+}
+
+export default App
+
+```
+
+#### staticwebapp.config.json
+
+`staticwebapp.config.json`はその名の通り，`Static Web Apps`の設定を書くファイルです．このファイルを編集すると，ユーザーが特定のページへのアクセスを制限したり，別のページにリダイレクトさせたりするような，ルールを書くことができます．
+
+例えば，`/admin`というページにサイト管理するようなページを作成したとすると，ただページを作成しただけでは，URLに`/admin`と打ち込むだけで誰でも簡単にアクセスできてしまいます．ここで，`staticwebapp.config.json`に以下のような記述をします．
+
+**staticwebapp.config.json**
+```json
+{
+  "routes":[
+    {
+      "route":"/admin",
+      "allowedRoles":["admin"]
+    }
+  ]
+}
+```
+こうすることによって，`/admin`にアクセスするユーザーが，`"admin"`というロールが無いとこのページにアクセスできないようになります．
+
+**ユーザー情報**
+```json
+{
+    "clientPrincipal": {
+        "identityProvider": "github",
+        "userId": "je89c8db0-3f6c-4f73-a802-20bfe0134f4c",
+        "userDetails": "UserName",
+        "userRoles": [
+            "anonymous",
+            "authenticated"
+            //ここに"admin"という項目が無いとアクセスできない
+        ]
+    }
+}
+```
+
+今回のTodoアプリには，以下のようなルールを設けようと思います．
+- `/api/*`(バックエンドへの問い合わせ)は認証したユーザー(`"authenticated"`ロールを持つユーザー)しかできないようにする．
+- `/.auth/login/github`を`/login`で簡略化する
+- `/.auth/logout`を`/logout`で簡略化する
+- AAD認証は出来ないようにする
+
+この構成を行う`staticwebapp.config.json`は以下のようになります．
+
+**staticwebapp.config.json**
+```json
+{
+    "trailingSlash": "auto",
+    "routes":[
+        {
+            "route":"/",
+            "allowedRoles":["anonymous","authenticated"]
+        },
+        {
+            "route":"/api/*",
+            "allowedRoles":["authenticated"]
+        },
+        {
+            "route": "/login",
+            "rewrite": "/.auth/login/github"
+        },
+        {
+            "route":"/logout",
+            "redirect":"/.auth/logout"
+        },
+        {
+            "route":"/.auth/login/aad",
+            "statusCode":404
+        }
+    ]
+}
+```
+では，ログイン，ログアウトのルートが変わったので，`Header.tsx`も書き換えましょう．
+
+```ts
+import './Header.css'
+import { useAppContext } from "../../providers/AppProvider"
+
+function Header(){
+    const resource = useAppContext();
+
+    const isLoggedIn = resource?.clientPrincipal !== null;
+
+    return(
+        <header>
+        <h2>Todo-App</h2>
+        <div>
+            {isLoggedIn ? (
+                <a href="/logout">ログアウト</a>
+            ) : (
+                <a href="/login">ログイン</a>
+            )}
+        </div>
+        </header>
+    )
+}
+
+export default Header
+```
+
+`staticwebapp.config.json`のもっと細かい設定が気になる人は[こちら](https://learn.microsoft.com/ja-jp/azure/static-web-apps/configuration)の公式ドキュメントを読んでみてください．
+
+これで，フロントエンドの大部分が完成です．
+
+#### 実行してみる
+
+`Static Web Apps CLI`を起動して，http://localhost:4280 にアクセスしてみましょう．
+
+![mainpage](/assets/mainpage.png)
+
+ログインしていない状態だと，このように表示されるはずです．では，ログインボタンを押して，ログインしてみましょう．
+
+![locallogin](/assets/locallogin.png)
+すると，このようなページが表示されるはずです．デプロイ先の環境では，実際のGitHubアカウントと連携しますが，`Static Web Apps CLI`を使用したデバッグだと，このようにユーザー情報を好きにいじってテストができるようになっています．今回は適当なUsernameを入力してLoginボタンを押しましょう．
+
+![loggedinpage](/assets/logedinpage.png)
+
+このように表示され，完了を押すとリストから削除され，フォームからタイトルと説明を入力して追加ボタンを押すと，リストに追加されます．
+
+では，一度ログアウトして，URLに`/.auth/login/aad`を追加して，無理やりAAD認証しようとします．
+
+![notfound](/assets/notfound.png)
+
+`staticwebapp.config.json`でAAD認証使用しようとすると，404を返すように設定しているので，`404: Not Found`のページが表示されます．
+
+また，このログアウトした状態で，`/api/SampleFunction`にアクセスしてみます．
+
+![unauthorized](/assets/unauthorized.png)
+`staticwebapp.config.json`で認証済みユーザーにしか`/api/*`にアクセスできないようにしたので，このように`401: Unauthorized`のページが表示されます．
 
 ### バックエンド
 

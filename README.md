@@ -1482,6 +1482,21 @@ export default Header
 
 ### バックエンド
 
+```bash
+dotnet add package Microsoft.Azure.Functions.Worker.Extensions.Tables --version 1.0.0
+```
+```bash
+dotnet add package Microsoft.Azure.Functions.Worker.Extensions.Storage --version 5.0.0
+```
+```bash
+dotnet add package Azure.Data.Tables --version 12.8.2
+```
+
+```bash
+func new
+```
+`HttpTrigger`,`TodoFunction`
+
 ### 繋ぎこみ
 
 ## デプロイ

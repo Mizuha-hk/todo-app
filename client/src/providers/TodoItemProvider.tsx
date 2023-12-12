@@ -27,23 +27,13 @@ const reducer = (todos: TodoItem[], action: TodoAction) => {
         case "REMOVE_TODO":{
             return todos.filter(todo => todo.id !== action.id);
         }
-        case "UPDATE_TODO": {
-            const newTodos = todos.map((todo:TodoItem) => {
-                if (todo.id === action.todo.id) {
-                    return action.todo;
-                }
-                return todo;
-            });
-            return {...todos, todos: newTodos};
-        }
         case "GET_TODOS":
             return action.todos;
         default:
             return todos;
         }
     }
-    
-        
+           
 const TodoItemProvider : React.FC<TodoItemProviderProps> = ({children}) =>{
     const resource = useAppContext();
     const [todos, dispatch] = useReducer(reducer, initialtodos);

@@ -3,3 +3,5 @@ type TodoItemRequest = {
     title: string;
     description: string;
 }
+
+export type { TodoItemRequest };

@@ -34,6 +34,11 @@ namespace api
             string userId = req.Query["userId"];
             string todoId = req.Query["todoId"];
 
+            if(string.IsNullOrEmpty(userId))
+            {
+                return new BadRequestObjectResult("UserId is required");
+            }
+
             if(string.IsNullOrEmpty(todoId))
             {
                 var todos = tableClient.Query<TodoEntity>().Where(t => t.PartitionKey == userId).ToList();
@@ -107,6 +112,40 @@ namespace api
             return new OkObjectResult(todoModel);
         }
 
+        [FunctionName("UpdateTodo")]
+        [OpenApiOperation(operationId: "Run", tags: new[] { "Todo" })]
+        [OpenApiRequestBody(contentType: "application/json", bodyType: typeof(TodoModel), Required = true, Description = "Todo object that needs to be updated")]
+        [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(TodoModel))]
+        public static async Task<IActionResult> UpdateTodo(
+            [HttpTrigger(AuthorizationLevel.Function, "put", Route = "todo")] HttpRequest req,
+            [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+            ILogger log)
+        {
+            log.LogInformation($"PUT /todo executed with body: {await req.ReadAsStringAsync()}");
+
+            var requestBody = await req.ReadAsStringAsync();
+            var todoModel = JsonConvert.DeserializeObject<TodoModel>(requestBody);
+
+            if(string.IsNullOrEmpty(todoModel.UserId) || string.IsNullOrEmpty(todoModel.Title))
+            {
+                return new BadRequestObjectResult("UserId and Title are required");
+            }
+
+            var todoEntity = new TodoEntity
+            {
+                RowKey = todoModel.Id,
+                PartitionKey = todoModel.UserId,
+                Title = todoModel.Title,
+                Description = todoModel.Description,
+                Timestamp = System.DateTimeOffset.UtcNow,
+                ETag = ETag.All
+            };
+
+            await tableClient.UpdateEntityAsync(todoEntity, ETag.All);
+
+            return new OkObjectResult(todoModel);
+        }
+
         [FunctionName("DeleteTodo")]
         [OpenApiOperation(operationId: "Run", tags: new[] { "Todo" })]
         [OpenApiParameter(name: "userId", In = ParameterLocation.Query, Required = true, Type = typeof(string))]
@@ -122,10 +161,14 @@ namespace api
             string userId = req.Query["userId"];
             string todoId = req.Query["todoId"];
 
+            if(string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(todoId))
+            {
+                return new BadRequestObjectResult("UserId and TodoId are required");
+            }
+
             await tableClient.DeleteEntityAsync(userId, todoId);
 
             return new NoContentResult();
-        }
-        
+        }        
     }
 }

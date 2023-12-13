@@ -1959,4 +1959,56 @@ POSTの項目の「Try it out」ボタンを押します．すると，バック
 
 ### 繋ぎこみ
 
+バックエンドが完成したので，`client/src/features/todos/index.ts`を書き換えて，バックエンドサーバーにアクセスするようにします．
+
+```ts
+import { TodoItem } from "./api/TodoItem";
+import { TodoItemRequest } from "./api/TodoItemRequest";
+
+async function GetTodos(userId: string) {
+    const result = await fetch('/api/todo/?userId=' + userId, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json'
+            }
+        });
+    const body = await result.json() as TodoItem[];
+
+    return body;
+}
+
+async function PostTodos(todo: TodoItemRequest) {
+    const result = await fetch('/api/todo', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(todo)
+    });
+    const body = await result.json() as TodoItem;
+    return body;
+}
+
+async function DeleteTodos(todo: TodoItem) {
+        await fetch('/api/todo/?userId='+todo.userId+'&todoId='+todo.id, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+}
+
+export { GetTodos };
+export { PostTodos };
+export { DeleteTodos };
+```
+
+これでバックエンドとの繋ぎこみは終了です．実際に`azurite`と`Static Web Apps CLI`を起動して，TODOアプリとして使ってみてください．もちろん，ログイン時にuserIdを変えたら，前のuserIdでのTodoは見れなくなります．
+
 ## デプロイ
+
+では作成したTodoアプリをAzureのStatic Web Appsにデプロイします．作成したTodoアプリは，GitHubにアップロードしておいてください．
+
+### リソースの作成
+
+### 

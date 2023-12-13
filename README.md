@@ -1323,6 +1323,7 @@ export default Form
 `Form.css`でお好みの見た目にしてください．
 
 #### App.tsxを編集
+
 最後に，`App.tsx`を編集して，これまで作成した部品を組み立てます．
 ```ts
 //import './App.css'
@@ -1482,20 +1483,479 @@ export default Header
 
 ### バックエンド
 
-```bash
-dotnet add package Microsoft.Azure.Functions.Worker.Extensions.Tables --version 1.0.0
+#### 概要
+
+バックエンド側で実装する機能は，Table Storageに保存されているTodoに対して，Todoの取得，保存，削除の3つです．また，今回はフロントエンドの実装が重くなるため使いませんが，保存されているTodoに対して更新する機能も作ります．余力があれば，フロントエンドからこのAPIにリクエストを送って，Todoの内容を編集する機能をつけてみてください．
+
+**ディレクトリ構造**
 ```
-```bash
-dotnet add package Microsoft.Azure.Functions.Worker.Extensions.Storage --version 5.0.0
+api
+├── Entity
+│   └── TodoEntity.cs
+├── Models
+│   ├── TodoModel.cs
+│   └── TodoRequestModel.cs
+├── Properties
+│   └── launchSettings.json
+├── SampleFunction.cs
+├── TodoFunction.cs
+├── api.csproj
+├── host.json
+└── local.settings.json
 ```
+
+#### 必要なパッケージのインストール
+今回はAzure Storage AccountのTable Storageにデータを保存していきます．そのために必要なパッケージをインストールしていきます．`/api`ディレクトリで以下の3つのコマンドを実行してください．
+
 ```bash
 dotnet add package Azure.Data.Tables --version 12.8.2
+dotnet add package Microsoft.Azure.WebJobs.Tables --version 1.2.1
+dotnet add package Microsoft.Azure.WebJobs.OpenApi --version 1.5.1
 ```
+#### Entityの追加
+
+Table Storageに保存されるデータには，`PartitionKey`と`RowKey`という要素が必須です．今回は`userId`を`PartitionKey`として使用し，Todoを一意に識別する`id`を`RowKey`として使用します．
+
+また，`Timestamp`と`ETag`も必須なので，追加しています．`Timestamp`はデータを保存した段階の時間を表す項目です．
+
+`ETag`はおまじないです．(~~説明するためにちゃんと調べたけど記事なさ過ぎてキレそう~~)
+
+`api/Entity`ディレクトリ下に，`TodoEntity.cs`というファイルを追加して，`TodoEntity`というクラスを定義していきます．この時，`ITableEntity`を継承します．そして，上記の4つの必須メンバに加えて，Todoのタイトルとして保存する`Title`と説明として保存する`Description`を追加しています．
+
+```cs
+using System;
+using Azure;
+using Azure.Data.Tables;
+
+namespace api.Entity
+{
+    public class TodoEntity: ITableEntity //ITableEntityを継承
+    {
+        //id
+        public string RowKey { get; set; }
+        //userId
+        public string PartitionKey { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+
+        public DateTimeOffset? Timestamp { get; set; }   
+        public ETag ETag { get; set; }
+    }
+}
+```
+この形式のデータがTable Storageに保存されることになります．
+
+#### Modelの追加
+
+Table Storageに保存するためのEntityを定義しましたが，フロントエンドとのデータのやり取りで`TodoEntity`クラスの形式でやり取りするわけではありません．そこで，フロントエンドとやり取りするためのクラスを定義していきます．
+
+**TodoModel.cs**
+
+Todoの取得や追加処理の時にフロントエンドに返す型
+```cs
+namespace api.Models
+{
+    public class TodoModel
+    {
+        public string Id { get; set; }
+        public string UserId { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+    }
+}
+```
+
+**TodoRequestModel**
+
+Todoの追加処理の時，フロントエンドからのリクエストを受け取るための型
+```cs
+namespace api.Models
+{
+    public class TodoRequestModel
+    {
+        public string UserId { get; set; }
+        public string Title { get; set; }
+        public string Description { get; set; }
+    }
+}
+```
+
+このように定義してもいいですが，`TodoModel`と`TodoRequestModel`ではメンバに`Id`の項目が増えただけなので，`TodoModel`は継承を使うとすっきり書けます．
+
+**TodoModel.cs**
+```cs
+namespace api.Models
+{
+    public class TodoModel : TodoRequestModel
+    {
+        public string Id { get; set; }
+    }
+}
+```
+
+これでフロントエンドとやり取りするModelの追加は完了です．
+
+#### Functionの追加
+
+`/todo-app/api`ディレクトリ下で以下のコマンドを実行し，`HttpTrigger`で，名前が`TodoFunction`で関数の追加をしていきます．
 
 ```bash
 func new
 ```
-`HttpTrigger`,`TodoFunction`
+
+すると，プロジェクト作成時に作成した`SampleFunction`と同じコードが生成されます．この`TodoFunction.cs`を編集していきます．
+
+#### Functionの編集
+
+では，`TodoFunction.cs`を編集して，各機能を実装していきます．以下，紹介するコードは`public static class TodoFunction { }`の中に書いていきます．
+
+##### Todoの取得
+
+Todoの取得のエンドポイントは，クエリパラメータとして`userId`をもらうと，そのユーザーが持つTodoをリストで返すようになっています．また，`userId`に加えて`todoId`というパラメータをもらうと，該当するTodoが1件返すようになっています．
+
+```cs
+[FunctionName("GetTodos")]
+[OpenApiOperation(operationId: "Run", tags: new[] { "Todo" })]
+[OpenApiParameter(name: "userId", In = ParameterLocation.Query, Required = true, Type = typeof(string))]
+[OpenApiParameter(name: "todoId", In = ParameterLocation.Query, Required = false, Type = typeof(string))]
+[OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<TodoModel>))]
+public static async Task<IActionResult> GetTodos(
+    [HttpTrigger(AuthorizationLevel.Function, "get", Route = "todo")] HttpRequest req,
+    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    ILogger log)
+{
+    log.LogInformation($"GET /todo executed with userId: {req.Query["userId"]} and todoId: {req.Query["todoId"]}");
+    //リクエストからクエリパラメータを取得
+    string userId = req.Query["userId"];
+    string todoId = req.Query["todoId"];
+    //userIdが指定されていないと，400:BadRequestを返す
+    if(string.IsNullOrEmpty(userId))
+    {
+        return new BadRequestObjectResult("UserId is required");
+    }
+
+    if(string.IsNullOrEmpty(todoId))
+    {
+        //todoIdが指定されていないときの処理
+        var todos = tableClient.Query<TodoEntity>().Where(t => t.PartitionKey == userId).ToList();
+        var todoModels = new List<TodoModel>();
+        foreach(var todo in todos)
+        {
+            todoModels.Add(new TodoModel
+            {
+                Id = todo.RowKey,
+                UserId = todo.PartitionKey,
+                Title = todo.Title,
+                Description = todo.Description
+            });
+        }
+        return new OkObjectResult(todoModels);               
+    }
+    else
+    {
+        //todoIdが指定されたときの処理
+        var todo = await tableClient.GetEntityAsync<TodoEntity>(userId, todoId);
+        var todoModel = new TodoModel
+        {
+            Id = todo.Value.RowKey,
+            UserId = todo.Value.PartitionKey,
+            Title = todo.Value.Title,
+            Description = todo.Value.Description
+        };
+
+        return new OkObjectResult(todoModel);
+    }
+}
+```
+
+まぁAzure Functionsはかなり癖の強いコードなので，説明していきます．(~~実際私はこの書き方はあまり好きじゃない~~)
+
+このコードは[]でメソッドそのものや引数に属性というものを付与しているので，慣れないとかなり見にくいです．なので，いったん属性を取り除いてみます．
+
+```cs
+public static async Task<IActionResult> GetTodos(
+    HttpRequest req,
+    TableClient tableClient,
+    ILogger log)
+{
+    //省略    
+    return new OkObjectResult(...);
+}
+```
+こうしてみると，引数は`HttpRequest`型の`req`，`TableClient`型の`tableClient`，`ILogger`型の`log`の3つをもらい，`OkObjectResult`等のレスポンスを返すメソッドになっています．
+
+このメソッド自体に5つの属性が付与されています．
+```cs
+[FunctionName("GetTodos")]
+[OpenApiOperation(operationId: "Run", tags: new[] { "Todo" })]
+[OpenApiParameter(name: "userId", In = ParameterLocation.Query, Required = true, Type = typeof(string))]
+[OpenApiParameter(name: "todoId", In = ParameterLocation.Query, Required = false, Type = typeof(string))]
+[OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<TodoModel>))]
+```
+
+`FunctionName`属性で，この関数の名前が付加されています．その他の`OpenApiOperation`等は，後に紹介するSwaggerというAPIのテストをしやすくするツールに対して，「このAPIはこういうリクエストをもらって，こういうレスポンスを返すよ」と指定してあげる属性なので，実装そのものに直接影響するものではありません．
+
+第一引数の`req`には以下のような属性が付与されています．
+```cs
+[HttpTrigger(AuthorizationLevel.Function, "get", Route = "todo")]
+```
+これは`req`に対して`api/todo`にGETメソッドのリクエストだということを指定しています．`AuthorizationLevel.Function`というのは，このAPIにアクセスできる認証レベルを指定しています．ただし，今回はStatic Web Appsに内包されたAzure Functionsであり，アクセスのレベルは`staticwebapp.config.json`で記述されているので，特に変更は必要ないです．
+
+第二引数の`tableClient`には以下のような属性が付与されています．
+```cs
+[Table("Todo", Connection = "AzureWebJobsStorage")]
+```
+
+これは，Table Storageを操作する`tableClient`に対して，Table Storageへ`"AzureWebJobsStorage"`という環境変数に保存されている文字列を使って接続し，そのTable Storageの`Todo`という名前のテーブルを操作するという性質を付与しています．
+
+Table Storageは外部のサービスなので，そのサービスに接続するための**秘密の文字列**を使って接続をします．なのでこの秘密の文字列を**コードに直接書いた状態でGitHub等に絶対にアップロードしてはいけません**．そこで，環境変数というものを使います．ローカル環境では，環境変数は`local.settings.json`に格納します．このファイルは`.gitignore`に含まれるため，`.gitignore`をいじらない限りGitHubにアップロードされることはありません．
+
+以下のファイルはプロジェクト作成時に生成される`local.settings.json`です．
+
+**local.settings.json**
+```json
+{
+    "IsEncrypted": false,
+    "Values": {
+        "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet"
+        
+    }
+}
+```
+この`Values`の中に，文字列名と文字列をセットで格納します．この中にすでに，`"AzureWebJobsStorage"`という名前で`"UseDevelopmentStorage=true"`という文字列が入っています．子文字列をプログラム上から読み取って使っていたというわけです．
+
+今回は，Table StorageのデバッグにAzuriteを使用するのですが，この場合はこの中の値を変更する必要はありません．この文字列を使えば，Azuriteに勝手に接続されるようになります．
+
+第三引数の`log`には何も属性が付与されていません．`log`について細かく説明しようとすると泥沼にはまってしまうので，とりあえず，Azure Functionsを実行中，ターミナルにログを出力したいときに，`log.LogInformation("...");`のように使うと，ログが出力できるオブジェクトであるとだけ言っておきます．
+
+##### Todoの追加
+
+Todoの追加のエンドポイントは，`userId`，`Title`，`Description`の項目を持つオブジェクトを受け取り，このTodoに一意に定まる`id`を付加してTable Storageに保存して，そのデータをフロントエンドに返します．
+
+```cs
+[FunctionName("AddTodo")]
+[OpenApiOperation(operationId: "Run", tags: new[] { "Todo" })]
+[OpenApiRequestBody(contentType: "application/json", bodyType: typeof(TodoRequestModel), Required = true, Description = "Todo object that needs to be added")]
+[OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(TodoModel))]
+public static async Task<IActionResult> AddTodo(
+    [HttpTrigger(AuthorizationLevel.Function, "post", Route = "todo")] HttpRequest req,
+    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    ILogger log)
+{
+    log.LogInformation($"POST /todo executed with body: {await req.ReadAsStringAsync()}");
+
+    //リクエストのbodyをJSON形式の文字列として読み取り，TodoRequestModeとして解釈する
+    var requestBody = await req.ReadAsStringAsync();
+    var todoRequestModel = JsonConvert.DeserializeObject<TodoRequestModel>(requestBody);
+    
+    //userIdとタイトルは空にできないようにする
+    if(string.IsNullOrEmpty(todoRequestModel.UserId) || string.IsNullOrEmpty(todoRequestModel.Title))
+    {
+        return new BadRequestObjectResult("UserId and Title are required");
+    }
+
+    //レスポンスとして返すオブジェクト
+    var todoModel = new TodoModel
+    {
+        /*一意に定まるidを生成して付加*/
+        Id = System.Guid.NewGuid().ToString(),
+        UserId = todoRequestModel.UserId,
+        Title = todoRequestModel.Title,
+        Description = todoRequestModel.Description
+    };
+
+    //Table Storageに保存するオブジェクト
+    var todoEntity = new TodoEntity
+    {
+        RowKey = todoModel.Id,
+        PartitionKey = todoModel.UserId,
+        Title = todoModel.Title,
+        Description = todoModel.Description,
+        Timestamp = System.DateTimeOffset.UtcNow,
+        ETag = ETag.All
+    };
+    //Table Storageに保存
+    await tableClient.AddEntityAsync(todoEntity);
+
+    return new OkObjectResult(todoModel);
+}
+```
+
+##### Todoの更新
+
+Todoの更新のエンドポイントは，更新後のTodoのオブジェクトを受け取り，Table Storage側を更新して，そのデータをそのまま返します．
+
+(追記: わざわざデータを返さずに`return new NoContentResult()`でいいかも)
+
+```cs
+[FunctionName("UpdateTodo")]
+[OpenApiOperation(operationId: "Run", tags: new[] { "Todo" })]
+[OpenApiRequestBody(contentType: "application/json", bodyType: typeof(TodoModel), Required = true, Description = "Todo object that needs to be updated")]
+[OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(TodoModel))]
+public static async Task<IActionResult> UpdateTodo(
+    [HttpTrigger(AuthorizationLevel.Function, "put", Route = "todo")] HttpRequest req,
+    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    ILogger log)
+{
+    log.LogInformation($"PUT /todo executed with body: {await req.ReadAsStringAsync()}");
+
+    var requestBody = await req.ReadAsStringAsync();
+    var todoModel = JsonConvert.DeserializeObject<TodoModel>(requestBody);
+
+    //userIdとタイトルは空にできないようにする
+    if(string.IsNullOrEmpty(todoModel.UserId) || string.IsNullOrEmpty(todoModel.Title))
+    {
+        return new BadRequestObjectResult("UserId and Title are required");
+    }
+
+    //更新先のデータオブジェクト
+    var todoEntity = new TodoEntity
+    {
+        RowKey = todoModel.Id,
+        PartitionKey = todoModel.UserId,
+        Title = todoModel.Title,
+        Description = todoModel.Description,
+        Timestamp = System.DateTimeOffset.UtcNow,
+        ETag = ETag.All
+    };
+
+    //対象のデータを更新する
+    await tableClient.UpdateEntityAsync(todoEntity, ETag.All);
+
+    return new OkObjectResult(todoModel);
+}
+```
+
+##### Todoの削除
+
+Todo削除のエンドポイントは，クエリパラメータとして`userId`と`todoId`を受け取り，対象のデータをTableStorageから削除して，NoContentを返す．
+
+```cs
+[FunctionName("DeleteTodo")]
+[OpenApiOperation(operationId: "Run", tags: new[] { "Todo" })]
+[OpenApiParameter(name: "userId", In = ParameterLocation.Query, Required = true, Type = typeof(string))]
+[OpenApiParameter(name: "todoId", In = ParameterLocation.Query, Required = true, Type = typeof(string))]
+[OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.NoContent, contentType: "application/json", bodyType: typeof(string))]
+public static async Task<IActionResult> DeleteTodo(
+    [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "todo")] HttpRequest req,
+    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    ILogger log)
+{
+    log.LogInformation($"DELETE /todo executed with userId: {req.Query["userId"]} and todoId: {req.Query["todoId"]}");
+
+    string userId = req.Query["userId"];
+    string todoId = req.Query["todoId"];
+
+    //userIdとtodoIdは必須
+    if(string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(todoId))
+    {
+        return new BadRequestObjectResult("UserId and TodoId are required");
+    }
+    //Table Storageの対象データを削除する
+    await tableClient.DeleteEntityAsync(userId, todoId);
+
+    return new NoContentResult();
+}
+```
+
+これでバックエンドの実装は終了です．
+
+#### 実行してみる
+
+バックエンドのテストは，`curl`コマンドや`Postman`といったアプリを使えば可能ですが，今回はSwaggerに対応するように実装したので，Swaggerを使用していきます．
+
+##### azuriteを準備する
+
+新しいターミナルを開いて，azuriteを起動します.
+```bash
+make azurite
+```
+Microsoft Azure Storage Explorerを起動します．
+
+![storage-exp-home](/assets/storage-exp-home.png)
+
+「ストレージアカウント」 から 「(エミュレーター 既定のポート) (Key)」を開きます．
+
+そこから「Tables」を右クリックし，「テーブルの作成」から`Todo`という名前を付けてテーブルを作成します．
+
+![make-table](/assets/storage-exp-mk-table.png)
+
+![made-table](/assets/storage-exp-made-table.png)
+
+これでazuriteの準備は完了です．
+
+##### Azure Functionsを起動する
+
+新しいターミナルを開いて，Azure Functionsを起動します．
+```bash
+make api
+```
+出力
+```bash
+cd api && func start 
+MSBuild version 17.8.3+195e7f5a3 for .NET
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  api -> /home/UserName/.../todo-app/api/bin/output/api.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:12.01
+
+
+
+Azure Functions Core Tools
+Core Tools Version:       4.0.5455 Commit hash: N/A  (64-bit)
+Function Runtime Version: 4.27.5.21554
+
+[2023-12-13T06:50:34.628Z] Found /home/miz/source/repos/todo-app/api/api.csproj. Using for user secrets file configuration.
+
+Functions:
+
+        AddTodo: [POST] http://localhost:7071/api/todo
+
+        DeleteTodo: [DELETE] http://localhost:7071/api/todo
+
+        GetTodos: [GET] http://localhost:7071/api/todo
+
+        RenderOAuth2Redirect: [GET] http://localhost:7071/api/oauth2-redirect.html
+
+        RenderOpenApiDocument: [GET] http://localhost:7071/api/openapi/{version}.{extension}
+
+        RenderSwaggerDocument: [GET] http://localhost:7071/api/swagger.{extension}
+
+        RenderSwaggerUI: [GET] http://localhost:7071/api/swagger/ui
+
+        SampleFunction: [GET,POST] http://localhost:7071/api/SampleFunction
+
+        UpdateTodo: [PUT] http://localhost:7071/api/todo
+
+For detailed output, run func with --verbose flag.
+[2023-12-13T06:50:42.601Z] Host lock lease acquired by instance ID '00000000000000000000000036942E80'.
+```
+
+出力のRenderSwaggerUIにある http://localhost:7071/api/swagger/ui にアクセスします．
+
+![swagger-home](/assets/swagger-home.png)
+
+このページからAPIのテストができます．今はデータが入っていないので，POSTからTodoの追加をしてみます．
+
+POSTの項目の「Try it out」ボタンを押します．すると，バックエンドに送信するデータを編集できます．
+
+![try-it-out](/assets/try-it-out.png)
+
+今はテストなので，適当な`userId`，`title`，`description`を指定して「Execute」を押します．
+
+![execute-post](/assets/execute-post.png)
+
+すると下にスクロールすると以下のようにバックエンドから帰ってきたレスポンスが表示されます．
+
+![post-response](/assets/post-response.png)
+
+あとは同様に，Todoを取得するGET，更新するPUT，削除するDELETEを好きに試してみてください．
 
 ### 繋ぎこみ
 

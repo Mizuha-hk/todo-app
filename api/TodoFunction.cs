@@ -26,7 +26,7 @@ namespace api
         [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<TodoModel>))]
         public static async Task<IActionResult> GetTodos(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = "todo")] HttpRequest req,
-            [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+            [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
             ILogger log)
         {
             log.LogInformation($"GET /todo executed with userId: {req.Query["userId"]} and todoId: {req.Query["todoId"]}");
@@ -76,7 +76,7 @@ namespace api
         [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(TodoModel))]
         public static async Task<IActionResult> AddTodo(
             [HttpTrigger(AuthorizationLevel.Function, "post", Route = "todo")] HttpRequest req,
-            [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+            [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
             ILogger log)
         {
             log.LogInformation($"POST /todo executed with body: {await req.ReadAsStringAsync()}");
@@ -118,7 +118,7 @@ namespace api
         [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(TodoModel))]
         public static async Task<IActionResult> UpdateTodo(
             [HttpTrigger(AuthorizationLevel.Function, "put", Route = "todo")] HttpRequest req,
-            [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+            [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
             ILogger log)
         {
             log.LogInformation($"PUT /todo executed with body: {await req.ReadAsStringAsync()}");
@@ -153,7 +153,7 @@ namespace api
         [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.NoContent, contentType: "application/json", bodyType: typeof(string))]
         public static async Task<IActionResult> DeleteTodo(
             [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "todo")] HttpRequest req,
-            [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+            [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
             ILogger log)
         {
             log.LogInformation($"DELETE /todo executed with userId: {req.Query["userId"]} and todoId: {req.Query["todoId"]}");

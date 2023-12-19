@@ -9,7 +9,23 @@
 
 ## 今回やること
 
-今回はTodoアプリを作成し，AzureのStatic Web Appsにデプロイ(公開)するまでをやっていきます．Static Web AppsはWebフロントをデプロイするのに使われるサービスですが，Azure Functionsというバックエンドサーバーをくっつけてデプロイすることができたり，認証機能が簡単に付けれたりします．そんな機能をフル活用して，認証機能付きのTodoアプリを作成していきます．また，データベースとして，Azure Storage Accountを使用します．
+今回はTodoアプリを作成し，AzureのStatic Web Appsにデプロイ(公開)するまでをやっていきます．Static Web AppsはWebフロントをデプロイするのに使われるサービスですが，Azure Functionsというバックエンドサーバーをくっつけてデプロイすることができたり，認証機能が簡単に付けれたりします．そんな機能をフル活用して，認証機能付きのTodoアプリを作成していきます．また，データベースとして，Azure Storage Accountを使用します．Storage Accountは，データベースとしてはかなり安く，今回作成するプランでは0.02$/GBで運用できるのでおすすめです．
+
+### 使用技術
+
+#### フロントエンド
+
+React.js + Viteのフレームワークを使用し，言語はTypeScriptを使用します．
+
+#### バックエンド
+
+Azure Functionsを使用し，言語はC#を使用します．
+
+また，データ保存のためのデータベースとして，Azure Storage AccountのTable Storageを使用します．
+
+### 技術構成図
+
+![tech-structure](/assets/todo-app-tech.png)
 
 ## Static Web Appのメリット / デメリット
 
@@ -1628,7 +1644,7 @@ Todoの取得のエンドポイントは，クエリパラメータとして`use
 [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(List<TodoModel>))]
 public static async Task<IActionResult> GetTodos(
     [HttpTrigger(AuthorizationLevel.Function, "get", Route = "todo")] HttpRequest req,
-    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
     ILogger log)
 {
     log.LogInformation($"GET /todo executed with userId: {req.Query["userId"]} and todoId: {req.Query["todoId"]}");
@@ -1710,12 +1726,14 @@ public static async Task<IActionResult> GetTodos(
 
 第二引数の`tableClient`には以下のような属性が付与されています．
 ```cs
-[Table("Todo", Connection = "AzureWebJobsStorage")]
+[Table("Todo", Connection = "TodoStorageConnection")]
 ```
 
-これは，Table Storageを操作する`tableClient`に対して，Table Storageへ`"AzureWebJobsStorage"`という環境変数に保存されている文字列を使って接続し，そのTable Storageの`Todo`という名前のテーブルを操作するという性質を付与しています．
+これは，Storage AccountのTable Storageを操作する`tableClient`に対して，Table Storageへ`"TodoStorageConnection"`という環境変数に保存されている文字列を使って接続し，そのTable Storageの`Todo`という名前のテーブルを操作するという性質を付与しています．
 
-Table Storageは外部のサービスなので，そのサービスに接続するための**秘密の文字列**を使って接続をします．なのでこの秘密の文字列を**コードに直接書いた状態でGitHub等に絶対にアップロードしてはいけません**．そこで，環境変数というものを使います．ローカル環境では，環境変数は`local.settings.json`に格納します．このファイルは`.gitignore`に含まれるため，`.gitignore`をいじらない限りGitHubにアップロードされることはありません．
+**環境変数について**
+
+Storage Accountは外部のサービスなので，そのサービスに接続するための**秘密の文字列**を使って接続をします．それが**接続文字列**です．接続文字列は流出すると悪用されるので，**コードに直接書いた状態でGitHub等に絶対にアップロードしてはいけません**．そこで，環境変数というものを使います．ローカル環境では，環境変数は`local.settings.json`に格納します．このファイルは`.gitignore`に含まれるため，`.gitignore`をいじらない限りGitHubにアップロードされることはありません．
 
 以下のファイルはプロジェクト作成時に生成される`local.settings.json`です．
 
@@ -1726,15 +1744,33 @@ Table Storageは外部のサービスなので，そのサービスに接続す�
     "Values": {
         "AzureWebJobsStorage": "UseDevelopmentStorage=true",
         "FUNCTIONS_WORKER_RUNTIME": "dotnet"
+    }
+}
+```
+この`Values`の中に，文字列名と文字列をセットで格納します．この中にすでに，`"AzureWebJobsStorage"`という名前で`"UseDevelopmentStorage=true"`という文字列，`"FUNCTIONS_WORKER_RUNTIME"`という名前で`"dotnet"`という文字列が入っています．
+
+例えば，`"UseDevelopmentStorage=true"`という文字列を使うとき，コード上では`"AzureWebJobsStorage"`という名前でしか見えないので，中の文字列が見えないようになっているというわけです．
+
+第三引数の`log`には何も属性が付与されていません．`log`について細かく説明しようとすると泥沼にはまってしまうので，とりあえず，Azure Functionsを実行中，ターミナルにログを出力したいときに，`log.LogInformation("...");`のように使うと，ログが出力できるオブジェクトであるとだけ言っておきます．
+
+---
+
+今回は，ローカルのデバッグでAzuriteを使用しますが，そのAzuriteに接続するための`"TodoStorageConnection"`が環境変数に設定されていないので設定していきます．
+
+この`"AzureWebJobsStorage"`を`"TodoStorageConnection"`に変更してください．
+
+```json
+{
+    "IsEncrypted": false,
+    "Values": {
+        "TodoStorageConnection": "UseDevelopmentStorage=true",
+        "FUNCTIONS_WORKER_RUNTIME": "dotnet"
         
     }
 }
 ```
-この`Values`の中に，文字列名と文字列をセットで格納します．この中にすでに，`"AzureWebJobsStorage"`という名前で`"UseDevelopmentStorage=true"`という文字列が入っています．子文字列をプログラム上から読み取って使っていたというわけです．
 
-今回は，Table StorageのデバッグにAzuriteを使用するのですが，この場合はこの中の値を変更する必要はありません．この文字列を使えば，Azuriteに勝手に接続されるようになります．
-
-第三引数の`log`には何も属性が付与されていません．`log`について細かく説明しようとすると泥沼にはまってしまうので，とりあえず，Azure Functionsを実行中，ターミナルにログを出力したいときに，`log.LogInformation("...");`のように使うと，ログが出力できるオブジェクトであるとだけ言っておきます．
+実は`"UseDevelopmentStorage=true"`という文字列が，Azuriteに接続するための接続文字列でした．`"AzureWebJobsStorage"`をそのまま使ってもよかったのですが，デプロイ時に少し支障があるので，名前を変更しました．
 
 ##### Todoの追加
 
@@ -1747,7 +1783,7 @@ Todoの追加のエンドポイントは，`userId`，`Title`，`Description`の
 [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(TodoModel))]
 public static async Task<IActionResult> AddTodo(
     [HttpTrigger(AuthorizationLevel.Function, "post", Route = "todo")] HttpRequest req,
-    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
     ILogger log)
 {
     log.LogInformation($"POST /todo executed with body: {await req.ReadAsStringAsync()}");
@@ -1802,7 +1838,7 @@ Todoの更新のエンドポイントは，更新後のTodoのオブジェクト
 [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.OK, contentType: "application/json", bodyType: typeof(TodoModel))]
 public static async Task<IActionResult> UpdateTodo(
     [HttpTrigger(AuthorizationLevel.Function, "put", Route = "todo")] HttpRequest req,
-    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
     ILogger log)
 {
     log.LogInformation($"PUT /todo executed with body: {await req.ReadAsStringAsync()}");
@@ -1846,7 +1882,7 @@ Todo削除のエンドポイントは，クエリパラメータとして`userId
 [OpenApiResponseWithBody(statusCode: System.Net.HttpStatusCode.NoContent, contentType: "application/json", bodyType: typeof(string))]
 public static async Task<IActionResult> DeleteTodo(
     [HttpTrigger(AuthorizationLevel.Function, "delete", Route = "todo")] HttpRequest req,
-    [Table("Todo", Connection = "AzureWebJobsStorage")] TableClient tableClient,
+    [Table("Todo", Connection = "TodoStorageConnection")] TableClient tableClient,
     ILogger log)
 {
     log.LogInformation($"DELETE /todo executed with userId: {req.Query["userId"]} and todoId: {req.Query["todoId"]}");
@@ -2014,6 +2050,104 @@ export { DeleteTodos };
 
 ## デプロイ
 
-Static Web Appsに重大なバグが発生しているため，修正され次第追加します．
+[Azure Portal](https://portal.azure.com/)にログインします．ログインするアカウントは，**学生用アカウント**を使用することをお勧めします．
+
+>学生用アカウントは，100$/年分のリソースを無料で使用することができます．また，登録にクレジットカード等が必要ないので，手軽に使うことができます．
+
+### Static Web Appsの作成
+Azure Portalのホーム画面から，リソースの作成をクリックします．
+
+![az-mk-resource](/assets/az-mk-resource.png)
+
+リソースの作成ページの検索ボックスで，`static web app`と検索し，「静的 Web アプリ」の，「作成」> 「静的 Web アプリ」をクリックします．
+
+![az-mk-swa1](/assets/az-mk-swa1.png)
+
+![az-mk-swa2](/assets/az-mk-swa2.png)
+
+クリックすると，Static Web Appの設定を行うページに移ります．まず，「リソース グループ」の項目から，新規作成をクリックし，リソースに適当な名前を付けて「OK」をクリックします．今回は，`todo-app-resource`と名前を付けました．
+
+![az-mk-swa3](/assets/az-mk-swa3.png)
+
+アプリの名前を入力します．今回は`todo-app`と付けました．次に，ホスティングプランを`Free`にチェックを入れ，Azure Functions APIとステージング環境のリージョンを `East Asia`にします．(まだJapan Eastは無いんですよねぇ...)
+
+![az-mk-swa-3.5](/assets/az-mk-swa3.5.png)
+
+デプロイの詳細を「GitHub」にし，「GitHub アカウント」のところから，GitHubにログインしてください．
+
+「組織」を自分のアカウント名，「リポジトリ」を今回作成したアプリのリポジトリ，「分岐」をmainにします．(環境によってはmaster)
+
+ビルド詳細は，「ビルドのプリセット」を「React」，「アプリの場所」は`/client`，APIの場所を`api`，出力先を`dist`にします．
+
+![az-mk-swa4](/assets/az-mk-swa4.png)
+
+これで「確認及び作成」をクリックし，必要な情報が欠けていないかチェックされ，チェックが完了したら「作成」をクリックして，Static Web Appを作成します．
+
+その後，GitHubの`todo-app`のリポジトリの`Actions`タブを開くと，以下のような項目が追加されています．ここが緑色の✅になっているとアプリそのもののデプロイは終了です．
+
+![github-actions](/assets/github-actions.png)
+
+### Storage Account及びTable Storageの構成
+
+まずStorage Accountの作成をしていきます．
+
+Azure Portalのホーム画面から，`todo-app-resource`(作成したリソースグループ)選択します．
+
+![az-mainmanu](/assets/az-mainmenue.png)
+
+そこから「作成」をクリックして，このリソースグループの中に新しいリソースを作成していきます．
+
+![az-resource-group](/assets/az-resource-group.png)
+
+検索ボックスに「ストレージ アカウント」と入力し，「ストレージ アカウント」から「作成」> 「ストレージ アカウント」をクリックします．
+
+![az-mk-storageaccount1](/assets/az-mk-storageaccount1.png)
+
+ストレージアカウント名を適当に入力し，地域を`(Asia Pacific) Japan East`に設定します．(今考えたらEast Asiaのほうがいいかもしれん...)
+
+パフォーマンスは「Standard」とし，他はそのままで大丈夫です．
+
+そうしたら，「確認及び作成」をクリックします．
+
+![az-mk-storageaccount2](/assets/az-mk-storageaccount2.png)
+
+すると，作成するストレージアカウントの設定情報が表示されます．今回はこのままでいいので，「作成」をクリックします．これでしばらく待てば，ストレージアカウントのデプロイは完了です．
+
+![az-mk-storageaccount3](/assets/az-mk-storageaccount3.png)
+
+次に，Table Storageの構成を行います．
+
+デプロイが完了したStorage Accountのリソースにアクセスし，左の「テーブル」タブから「＋テーブル」をクリックし，`Todo`という名前をつけて「OK」をクリックし，Todoという名前のテーブルを作成します．これでTable Storageの構成は終了です．
+
+![az-mk-table](/assets/az-mk-table.png)
+
+### Static Web AppとStorage Accountの接続
+
+ストレージアカウントの「アクセスキー」タブを開きます．key1の「接続文字列」の欄の「表示」をクリックして，表示された接続文字列をコピーします．
+
+![az-view-connection](/assets/az-view-connection.png)
+
+次に，作成したStatic Web Appのリソースに移動して，「構成」タブの，「＋追加」をクリックします．そこに名前と値を入れる欄があるので，名前を`TodoStorageConnection`にし，値をさっきコピーしてきた文字列を入れて保存します．
+
+この`TodoStorageConnection`は，バックエンドの開発で使った環境変数の名前ですね．こうすることで，ローカル環境で実行する際はAzurite，Azure上の本番環境だとデプロイしたStorage Accountに接続されるようになるという感じです．
+
+この設定が終わると，アプリのデプロイは完了です．
+
+![az-edit-config](/assets/az-edit-config.png)
+
+Static Web Appの概要タブに，URLという項目があるので，そのURLにアクセスすると，公開されたアプリを使うことができます．
+
+### CI/CDについて
+
+今回のデプロイの構成では，GitHub Actionsを使ったCI/CDが有効になっています．CI/CDについて深く言及すると，さらに長くなってしまうので結論から言うと，**GitHubにアプリのコードを`main`ブランチにマージすると，そのアプリが自動でデプロイ先に反映されます．**
+
+なので，アプリを作った後に機能を追加したい場合は，`main`ブランチに書いたコードをマージすれば，Azure側(デプロイ先)でアップデート作業をごちゃごちゃしなくて大丈夫になります．
+
+AzureはGitHub Actionsを使ったCI/CDが簡単に組めるので非常におすすめです．
 
 ## おわりに
+**ここまで本当にお疲れさまでした．** Webアプリの構成としてはかなり簡易的な設計でしたが，かなり長くなっちゃいました...
+
+ただこれができれば，小さめのWebアプリであれば低コストで公開していられるので，おすすめです．
+
+最後まで読んでくださり，本当にありがとうございました．
